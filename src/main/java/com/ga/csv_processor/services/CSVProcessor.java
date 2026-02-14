@@ -6,12 +6,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.Period;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 
 import static com.ga.csv_processor.enums.ROLES.*;
@@ -96,6 +95,44 @@ public class CSVProcessor {
         double serviceReward = yearsWorked * 2.0;
 
         return currentSalary + (currentSalary * (serviceReward / 100)) + (currentSalary * (rolePercentage / 100));
+    }
+
+    /**
+     * Returns an employees.csv file that contains the employees with their new raised salaries.
+     * @param employeeFile MultipartFile original employees .csv or , separated .txt file to calculate from.
+     * @return boolean true if successfully saved file.
+     */
+    public boolean downloadEmployeesWithRaiseFile(MultipartFile employeeFile) {
+        this.employees = loadEmployees(employeeFile);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        try {
+            BufferedWriter writer = new BufferedWriter(new FileWriter("data/employees.csv"));
+
+            int index = 0;
+            int total = this.employees.size();
+            for (Employee employee : this.employees) { // Write each employee as a data row
+                employee.setSalary(calculateSalaryWithRaise(employee));
+
+                String row = employee.getId() + "," +
+                        employee.getName() + "," +
+                        employee.getSalary() + "," +
+                        employee.getJoinDate().format(formatter) + "," +
+                        employee.getRole() + "," +
+                        employee.getProjectCompletionPercentage();
+
+                writer.write(row);
+                if (index != (total - 1)) writer.newLine(); // avoid adding a new empty line at last row
+
+                index++;
+            }
+
+            writer.close();
+
+            return true;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
 
