@@ -57,6 +57,46 @@ public class CSVProcessor {
             throw new RuntimeException("File upload error: " + e.getMessage());
         }
     }
+
+    /**
+     * Calculate and return employee's raise amount based on formula.
+     * - Each completed service year is 2%
+     * - % based on job role: Director 5%, Manager 2%, Employee 1%
+     * - Project completion % below 60% get no raise at all
+     * - Project completion % above 80% get 1.5x job role raise
+     * FORMULA: (years worked * 2%) + role%
+     * @param employee Employee
+     * @return double New increased salary
+     */
+    public double calculateSalaryWithRaise(Employee employee) {
+        double currentSalary = employee.getSalary();
+        LocalDate joinDate = employee.getJoinDate();
+        ROLES role = employee.getRole();
+        double projectCompletionPercentage = employee.getProjectCompletionPercentage();
+
+        if (projectCompletionPercentage < 0.6) return currentSalary; // Weed out low-achievers
+
+        double rolePercentage = 0.0;
+
+        if (role.equals(DIRECTOR)) { // Determine role-based raise %
+            rolePercentage = 5.0;
+        } else if (role.equals(MANAGER)) {
+            rolePercentage = 2.0;
+        } else if (role.equals(EMPLOYEE)) {
+            rolePercentage = 1.0;
+        }
+
+        if (projectCompletionPercentage > 0.8) rolePercentage = rolePercentage * 1.5; // Reward high-achievers
+
+        // Determine number of years worked
+        LocalDate today = LocalDate.now();
+        Period period = Period.between(joinDate, today);
+        int yearsWorked = period.getYears();
+
+        double serviceReward = yearsWorked * 2.0;
+
+        return currentSalary + (currentSalary * (serviceReward / 100)) + (currentSalary * (rolePercentage / 100));
+    }
 }
 
 /*
