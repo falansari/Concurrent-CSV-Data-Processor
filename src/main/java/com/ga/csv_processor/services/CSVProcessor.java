@@ -9,10 +9,12 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
-import java.util.Date;
+
+import static com.ga.csv_processor.enums.ROLES.*;
 
 @Service
 public class CSVProcessor {
@@ -40,7 +42,7 @@ public class CSVProcessor {
                 int id = Integer.parseInt(employeeData[0]);
                 String name = employeeData[1];
                 double salary = Double.parseDouble(employeeData[2]);
-                Date joinDate = simpleDateFormat.parse(employeeData[3]);
+                LocalDate joinDate = LocalDate.parse(employeeData[3]);
                 ROLES role = ROLES.valueOf(employeeData[4].toUpperCase());
                 double projectCompletionPercentage = Double.parseDouble(employeeData[5]);
 
@@ -53,18 +55,11 @@ public class CSVProcessor {
             return this.employees;
         } catch (IOException e) {
             throw new RuntimeException("File upload error: " + e.getMessage());
-        } catch (ParseException e) {
-            throw new RuntimeException("Date format error: " + e.getMessage());
         }
     }
 }
 
 /*
-    if the manager worked 5 years:
-    Yearly increase = 5 × 2% = 10%
-    Role increase = 2%
-    Total increase = 12%
-
     - use thread pool
 
     - Locks: The java.util.concurrent.locks.Lock interface provides a more flexible synchronization mechanism than intrinsic locks.

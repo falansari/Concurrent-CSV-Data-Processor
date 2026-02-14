@@ -4,7 +4,7 @@ import com.ga.csv_processor.enums.ROLES;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.Date;
+import java.time.LocalDate;
 
 /**
  * Employee object model class
@@ -21,7 +21,7 @@ public class Employee {
     private int id;
     private String name;
     private double salary;
-    private Date joinDate;
+    private LocalDate joinDate;
     /**
      * Director, Manager, or Employee
      */
@@ -31,7 +31,7 @@ public class Employee {
      */
     private double projectCompletionPercentage;
 
-    public Employee(int id, String name, double salary,  Date joinDate, Enum<ROLES> role, double projectCompletionPercentage) {
+    public Employee(int id, String name, double salary, LocalDate joinDate, Enum<ROLES> role, double projectCompletionPercentage) {
         this.id = id;
         this.name = name;
         this.salary = salary;
