@@ -25,13 +25,13 @@ public class Employee {
     /**
      * Director, Manager, or Employee
      */
-    private Enum<ROLES> role;
+    private ROLES role;
     /**
      * Value range from 0.0 (0%) to 1.0 (100%)
      */
     private double projectCompletionPercentage;
 
-    public Employee(int id, String name, double salary, LocalDate joinDate, Enum<ROLES> role, double projectCompletionPercentage) {
+    public Employee(int id, String name, double salary, LocalDate joinDate, ROLES role, double projectCompletionPercentage) {
         this.id = id;
         this.name = name;
         this.salary = salary;
