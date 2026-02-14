@@ -9,10 +9,12 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
-import java.util.Date;
+
+import static com.ga.csv_processor.enums.ROLES.*;
 
 @Service
 public class CSVProcessor {
@@ -40,7 +42,7 @@ public class CSVProcessor {
                 int id = Integer.parseInt(employeeData[0]);
                 String name = employeeData[1];
                 double salary = Double.parseDouble(employeeData[2]);
-                Date joinDate = simpleDateFormat.parse(employeeData[3]);
+                LocalDate joinDate = LocalDate.parse(employeeData[3]);
                 ROLES role = ROLES.valueOf(employeeData[4].toUpperCase());
                 double projectCompletionPercentage = Double.parseDouble(employeeData[5]);
 
@@ -53,18 +55,51 @@ public class CSVProcessor {
             return this.employees;
         } catch (IOException e) {
             throw new RuntimeException("File upload error: " + e.getMessage());
-        } catch (ParseException e) {
-            throw new RuntimeException("Date format error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Calculate and return employee's raise amount based on formula.
+     * - Each completed service year is 2%
+     * - % based on job role: Director 5%, Manager 2%, Employee 1%
+     * - Project completion % below 60% get no raise at all
+     * - Project completion % above 80% get 1.5x job role raise
+     * FORMULA: (years worked * 2%) + role%
+     * @param employee Employee
+     * @return double New increased salary
+     */
+    public double calculateSalaryWithRaise(Employee employee) {
+        double currentSalary = employee.getSalary();
+        LocalDate joinDate = employee.getJoinDate();
+        ROLES role = employee.getRole();
+        double projectCompletionPercentage = employee.getProjectCompletionPercentage();
+
+        if (projectCompletionPercentage < 0.6) return currentSalary; // Weed out low-achievers
+
+        double rolePercentage = 0.0;
+
+        if (role.equals(DIRECTOR)) { // Determine role-based raise %
+            rolePercentage = 5.0;
+        } else if (role.equals(MANAGER)) {
+            rolePercentage = 2.0;
+        } else if (role.equals(EMPLOYEE)) {
+            rolePercentage = 1.0;
+        }
+
+        if (projectCompletionPercentage > 0.8) rolePercentage = rolePercentage * 1.5; // Reward high-achievers
+
+        // Determine number of years worked
+        LocalDate today = LocalDate.now();
+        Period period = Period.between(joinDate, today);
+        int yearsWorked = period.getYears();
+
+        double serviceReward = yearsWorked * 2.0;
+
+        return currentSalary + (currentSalary * (serviceReward / 100)) + (currentSalary * (rolePercentage / 100));
     }
 }
 
 /*
-    if the manager worked 5 years:
-    Yearly increase = 5 × 2% = 10%
-    Role increase = 2%
-    Total increase = 12%
-
     - use thread pool
 
     - Locks: The java.util.concurrent.locks.Lock interface provides a more flexible synchronization mechanism than intrinsic locks.

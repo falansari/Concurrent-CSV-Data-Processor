@@ -4,10 +4,7 @@ import com.ga.csv_processor.models.Employee;
 import com.ga.csv_processor.services.CSVProcessor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
@@ -26,5 +23,15 @@ public class CSVProcessorController {
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ArrayList<Employee> uploadEmployeeData(@RequestParam("file") MultipartFile file) {
         return csvProcessor.loadEmployees(file);
+    }
+
+    /**
+     * Calculate and return employee's new salary after raise.
+     * @param employee Employee
+     * @return double Raised salary.
+     */
+    @PostMapping("/raise")
+    public double calculateSalaryWithRaise(@RequestBody Employee employee) {
+        return csvProcessor.calculateSalaryWithRaise(employee);
     }
 }
