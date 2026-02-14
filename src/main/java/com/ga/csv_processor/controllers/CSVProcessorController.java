@@ -34,4 +34,14 @@ public class CSVProcessorController {
     public double calculateSalaryWithRaise(@RequestBody Employee employee) {
         return csvProcessor.calculateSalaryWithRaise(employee);
     }
+
+    /**
+     * Download employee.csv file with new salaries after raise. Takes original before-raise file as data input.
+     * @param file MultipartFile .csv, or , separated .txt
+     * @return boolean True if successfully downloaded.
+     */
+    @PostMapping(value = "/download", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public boolean downloadEmployeeFileWithRaise(@RequestParam("file") MultipartFile file) {
+        return csvProcessor.downloadEmployeesWithRaiseFile(file);
+    }
 }
