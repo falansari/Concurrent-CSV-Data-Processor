@@ -13,7 +13,7 @@ import java.util.Date;
  * name String
  * salary double
  * joinDate Date
- * role String [Director, Manager, Employee]
+ * role Enum ROLES [Director, Manager, Employee]
  * projectCompletionPercentage double
  */
 @Getter @Setter
