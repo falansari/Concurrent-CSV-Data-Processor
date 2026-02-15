@@ -8,12 +8,14 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
+import java.util.concurrent.*;
 
 @RestController
 @RequestMapping("processor")
 public class CSVProcessorController {
     @Autowired
     private CSVProcessor csvProcessor;
+    private final ExecutorService executorService = Executors.newFixedThreadPool(8);
 
     /**
      * Upload employee data with a CSV or , separated text file.
@@ -21,8 +23,10 @@ public class CSVProcessorController {
      * @return ArrayList of Employee objects
      */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ArrayList<Employee> uploadEmployeeData(@RequestParam("file") MultipartFile file) {
-        return csvProcessor.loadEmployees(file);
+    public ArrayList<Employee> uploadEmployeeData(@RequestParam("file") MultipartFile file) throws ExecutionException, InterruptedException {
+        Future<ArrayList<Employee>> future = executorService.submit(() -> csvProcessor.loadEmployees(file));
+        return future.get();
+    }
     }
 
     /**

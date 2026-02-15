@@ -7,17 +7,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
-import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static com.ga.csv_processor.enums.ROLES.*;
 
 @Service
 public class CSVProcessor {
     ArrayList<Employee> employees;
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     @Autowired
     public CSVProcessor(ArrayList<Employee> employees) {
@@ -30,11 +32,12 @@ public class CSVProcessor {
      * @return ArrayList of Employee.
      */
     public ArrayList<Employee> loadEmployees(MultipartFile employeeFile) {
+        lock.writeLock().lock();
+
         try {
             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(employeeFile.getInputStream()));
             String line;
             ArrayList<Employee> employees = new ArrayList<>();
-            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd");
 
             while ((line = bufferedReader.readLine()) != null) { // Load up data rows
                 String[] employeeData = line.split(",");
@@ -54,6 +57,8 @@ public class CSVProcessor {
             return this.employees;
         } catch (IOException e) {
             throw new RuntimeException("File upload error: " + e.getMessage());
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
