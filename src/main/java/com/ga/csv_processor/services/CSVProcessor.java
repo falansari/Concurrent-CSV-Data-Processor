@@ -69,11 +69,10 @@ public class CSVProcessor {
      * - Project completion % below 60% get no raise at all
      * - Project completion % above 80% get 1.5x job role raise
      * FORMULA: (years worked * 2%) + role%
-     * @param employeeId int
+     * @param employee Employee object
      * @return double New increased salary
      */
-    public double calculateSalaryWithRaise(int employeeId) {
-        Employee employee = employees.get(employeeId);
+    public double calculateSalaryWithRaise(Employee employee) {
         double currentSalary = employee.getSalary();
         LocalDate joinDate = employee.getJoinDate();
         ROLES role = employee.getRole();
@@ -104,21 +103,20 @@ public class CSVProcessor {
     }
 
     /**
-     * Returns an employees.csv file that contains the employees with their new raised salaries.
-     * @param employeeFile MultipartFile original employees .csv or , separated .txt file to calculate from.
+     * Returns an employees.csv file that contains the employees with their new raised salaries. Write locked.
      * @return boolean true if successfully saved file.
      */
-    public boolean downloadEmployeesWithRaiseFile(MultipartFile employeeFile) {
-        this.employees = loadEmployees(employeeFile);
+    public boolean downloadEmployeesWithRaise() {
+        lock.writeLock().lock();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
         try {
             BufferedWriter writer = new BufferedWriter(new FileWriter("data/employees.csv"));
 
-            int index = 0;
             int total = this.employees.size();
-            for (Employee employee : this.employees) { // Write each employee as a data row
-                employee.setSalary(calculateSalaryWithRaise(employee.getId()));
+            for (int i = 0; i < total; i++) { // Write each employee as a data row
+                Employee employee = this.employees.get(i);
+                employee.setSalary(calculateSalaryWithRaise(employee));
 
                 String row = employee.getId() + "," +
                         employee.getName() + "," +
@@ -128,9 +126,7 @@ public class CSVProcessor {
                         employee.getProjectCompletionPercentage();
 
                 writer.write(row);
-                if (index != (total - 1)) writer.newLine(); // avoid adding a new empty line at last row
-
-                index++;
+                if (i != (total - 1)) writer.newLine(); // avoid adding a new empty line at last row
             }
 
             writer.close();
@@ -138,6 +134,8 @@ public class CSVProcessor {
             return true;
         } catch (IOException e) {
             throw new RuntimeException(e);
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
@@ -156,11 +154,6 @@ public class CSVProcessor {
 }
 
 /*
-    - use thread pool
-
-    - Locks: The java.util.concurrent.locks.Lock interface provides a more flexible synchronization mechanism than intrinsic locks.
-    It allows for more advanced locking strategies such as reentrant locks, fair locks, and condition variables.
-
     - Atomic operations: Java provides atomic classes such as AtomicInteger, AtomicLong, and AtomicReference in the java.util.concurrent.atomic package.
     These classes provide atomic operations that are guaranteed to be executed without interruption,
     making them useful for implementing thread-safe operations on primitive types and object references.

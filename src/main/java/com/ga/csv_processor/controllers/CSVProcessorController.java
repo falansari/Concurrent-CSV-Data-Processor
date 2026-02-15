@@ -15,6 +15,9 @@ import java.util.concurrent.*;
 public class CSVProcessorController {
     @Autowired
     private CSVProcessor csvProcessor;
+    /**
+     * 8 thread fixed thread pool for asynchronous service execution.
+     */
     private final ExecutorService executorService = Executors.newFixedThreadPool(8);
 
     /**
@@ -23,9 +26,8 @@ public class CSVProcessorController {
      * @return ArrayList of Employee objects
      */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ArrayList<Employee> uploadEmployeeData(@RequestParam("file") MultipartFile file) throws ExecutionException, InterruptedException {
-        Future<ArrayList<Employee>> future = executorService.submit(() -> csvProcessor.loadEmployees(file));
-        return future.get();
+    public CompletableFuture<ArrayList<Employee>> uploadEmployeeData(@RequestParam("file") MultipartFile file) {
+        return CompletableFuture.supplyAsync(() -> csvProcessor.loadEmployees(file), executorService);
     }
 
     /**
@@ -39,21 +41,20 @@ public class CSVProcessorController {
 
     /**
      * Calculate and return employee's new salary after raise. Supports asynchronous multithreading.
-     * @param employeeId int
+     * @param employee Employee object
      * @return double Raised salary.
      */
     @PostMapping("/raise")
-    public CompletableFuture<Double> calculateSalaryWithRaise(@RequestParam("id") int employeeId) {
-        return CompletableFuture.supplyAsync(() -> csvProcessor.calculateSalaryWithRaise(employeeId), executorService);
+    public CompletableFuture<Double> calculateSalaryWithRaise(@RequestBody Employee employee) {
+        return CompletableFuture.supplyAsync(() -> csvProcessor.calculateSalaryWithRaise(employee), executorService);
     }
 
     /**
      * Download employee.csv file with new salaries after raise. Takes original before-raise file as data input.
-     * @param file MultipartFile .csv, or , separated .txt
      * @return boolean True if successfully downloaded.
      */
-    @PostMapping(value = "/download", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public boolean downloadEmployeeFileWithRaise(@RequestParam("file") MultipartFile file) {
-        return csvProcessor.downloadEmployeesWithRaiseFile(file);
+    @GetMapping("/download")
+    public CompletableFuture<Boolean> downloadEmployeesFileWithRaise() {
+        return CompletableFuture.supplyAsync(() -> csvProcessor.downloadEmployeesWithRaise(), executorService);
     }
 }
