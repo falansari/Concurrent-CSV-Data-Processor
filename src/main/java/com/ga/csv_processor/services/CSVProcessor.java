@@ -11,6 +11,13 @@ import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -104,36 +111,47 @@ public class CSVProcessor {
 
     /**
      * Returns an employees.csv file that contains the employees with their new raised salaries. Write locked.
-     * @return boolean true if successfully saved file.
+     * Supports pooled multithreading through the use of Runnable workers.
+     * @return boolean true if successfully saved file data/employees.csv
      */
     public boolean downloadEmployeesWithRaise() {
         lock.writeLock().lock();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
         try {
-            BufferedWriter writer = new BufferedWriter(new FileWriter("data/employees.csv"));
-
             int total = this.employees.size();
-            for (int i = 0; i < total; i++) { // Write each employee as a data row
-                Employee employee = this.employees.get(i);
-                employee.setSalary(calculateSalaryWithRaise(employee));
+            AtomicInteger index = new AtomicInteger(0); // For the loop
+            ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>(); // For data rows to add them sequentially while supporting multithreading
 
-                String row = employee.getId() + "," +
-                        employee.getName() + "," +
-                        employee.getSalary() + "," +
-                        employee.getJoinDate().format(formatter) + "," +
-                        employee.getRole() + "," +
-                        employee.getProjectCompletionPercentage();
+            ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()); // Thread pool
 
-                writer.write(row);
-                if (i != (total - 1)) writer.newLine(); // avoid adding a new empty line at last row
+            Runnable worker = () -> { // Process data rows into a queue
+                for (int i = index.getAndIncrement(); i < total; i = index.getAndIncrement()) { // Write each employee as a data row
+                    Employee employee = this.employees.get(i);
+                    employee.setSalary(calculateSalaryWithRaise(employee));
+
+                    String row = formatDataRow(employee);
+
+                    queue.add(row);
+                }
+            };
+
+            // Launch workers
+            int workers = Runtime.getRuntime().availableProcessors();
+            for (int i = 0; i < workers; i++) {
+                executorService.submit(worker);
             }
 
-            writer.close();
+            executorService.shutdown();
+            boolean isTerminated = executorService.awaitTermination(60, TimeUnit.SECONDS);
+
+            if (isTerminated) { // Write only after all workers done adding rows to queue
+                return writeDataRowsToFile(queue);
+            }
 
             return true;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e.getMessage());
         } finally {
             lock.writeLock().unlock();
         }
@@ -151,10 +169,62 @@ public class CSVProcessor {
             lock.readLock().unlock();
         }
     }
-}
 
-/*
-    - Atomic operations: Java provides atomic classes such as AtomicInteger, AtomicLong, and AtomicReference in the java.util.concurrent.atomic package.
-    These classes provide atomic operations that are guaranteed to be executed without interruption,
-    making them useful for implementing thread-safe operations on primitive types and object references.
-    */
+    /**
+     * Write data rows to data/employees.csv file.
+     * @param queue ConcurrentLinkedQueue of String the data rows' queue.
+     * @return boolean true if successfully written.
+     */
+    private boolean writeDataRowsToFile(ConcurrentLinkedQueue<String> queue) {
+        try { // Write data rows into csv file
+            List<String> rows = sortDataQueue(queue);
+            BufferedWriter writer = new BufferedWriter(new FileWriter("data/employees.csv"));
+
+            for (int i = 0; i < rows.size(); i++) {
+                writer.write(rows.get(i));
+
+                if (i != rows.size() - 1) { // Avoid adding new line after last row
+                    writer.newLine();
+                }
+            }
+
+            writer.close();
+
+            return true;
+        } catch (IOException e) {
+            throw new RuntimeException("File write error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Sort data queue by employee id.
+     * @param queue ConcurrentLinkedQueue of String
+     * @return List of String sorted list.
+     */
+    private List<String> sortDataQueue(ConcurrentLinkedQueue<String> queue) {
+        List<String> list = new ArrayList<>();
+        while (!queue.isEmpty()) {
+            list.add(queue.poll());
+        }
+
+        list.sort(Comparator.comparingInt(row -> Integer.parseInt(row.split(",")[0])));
+
+        return list;
+    }
+
+    /**
+     * Take Employee object and return it as a string data row for CSV saving.
+     * @param employee Employee
+     * @return String .csv formatted.
+     */
+    private String formatDataRow(Employee employee) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        return employee.getId() + "," +
+                employee.getName() + "," +
+                employee.getSalary() + "," +
+                employee.getJoinDate().format(formatter) + "," +
+                employee.getRole() + "," +
+                employee.getProjectCompletionPercentage();
+    }
+}
