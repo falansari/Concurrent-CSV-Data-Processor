@@ -16,9 +16,9 @@ public class CSVProcessorController {
     @Autowired
     private CSVProcessor csvProcessor;
     /**
-     * 8 thread fixed thread pool for asynchronous service execution.
+     * fixed thread pool for asynchronous service execution, utilizes all available processor cores.
      */
-    private final ExecutorService executorService = Executors.newFixedThreadPool(8);
+    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
     /**
      * Upload employee data with a CSV or , separated text file.
