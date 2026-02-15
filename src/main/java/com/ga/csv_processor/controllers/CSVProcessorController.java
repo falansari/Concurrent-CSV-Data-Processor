@@ -27,6 +27,14 @@ public class CSVProcessorController {
         Future<ArrayList<Employee>> future = executorService.submit(() -> csvProcessor.loadEmployees(file));
         return future.get();
     }
+
+    /**
+     * Get list of employees. Supports asynchronous multithreading.
+     * @return ArrayList of Employee objects
+     */
+    @GetMapping("/employees")
+    public CompletableFuture<ArrayList<Employee>> getEmployees() {
+        return CompletableFuture.supplyAsync(() -> csvProcessor.getEmployees(), executorService);
     }
 
     /**

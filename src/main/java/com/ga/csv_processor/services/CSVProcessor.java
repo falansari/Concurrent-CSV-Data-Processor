@@ -139,6 +139,19 @@ public class CSVProcessor {
             throw new RuntimeException(e);
         }
     }
+
+    /**
+     * Get list of employees data objects.
+     * @return ArrayList of Employee
+     */
+    public ArrayList<Employee> getEmployees() {
+        lock.readLock().lock();
+        try {
+            return employees;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
 }
 
 /*
