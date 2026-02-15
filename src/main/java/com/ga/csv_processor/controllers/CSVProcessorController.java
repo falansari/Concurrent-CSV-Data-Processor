@@ -38,13 +38,13 @@ public class CSVProcessorController {
     }
 
     /**
-     * Calculate and return employee's new salary after raise.
-     * @param employee Employee
+     * Calculate and return employee's new salary after raise. Supports asynchronous multithreading.
+     * @param employeeId int
      * @return double Raised salary.
      */
     @PostMapping("/raise")
-    public double calculateSalaryWithRaise(@RequestBody Employee employee) {
-        return csvProcessor.calculateSalaryWithRaise(employee);
+    public CompletableFuture<Double> calculateSalaryWithRaise(@RequestParam("id") int employeeId) {
+        return CompletableFuture.supplyAsync(() -> csvProcessor.calculateSalaryWithRaise(employeeId), executorService);
     }
 
     /**

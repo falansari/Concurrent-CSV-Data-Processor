@@ -69,10 +69,11 @@ public class CSVProcessor {
      * - Project completion % below 60% get no raise at all
      * - Project completion % above 80% get 1.5x job role raise
      * FORMULA: (years worked * 2%) + role%
-     * @param employee Employee
+     * @param employeeId int
      * @return double New increased salary
      */
-    public double calculateSalaryWithRaise(Employee employee) {
+    public double calculateSalaryWithRaise(int employeeId) {
+        Employee employee = employees.get(employeeId);
         double currentSalary = employee.getSalary();
         LocalDate joinDate = employee.getJoinDate();
         ROLES role = employee.getRole();
@@ -117,7 +118,7 @@ public class CSVProcessor {
             int index = 0;
             int total = this.employees.size();
             for (Employee employee : this.employees) { // Write each employee as a data row
-                employee.setSalary(calculateSalaryWithRaise(employee));
+                employee.setSalary(calculateSalaryWithRaise(employee.getId()));
 
                 String row = employee.getId() + "," +
                         employee.getName() + "," +
