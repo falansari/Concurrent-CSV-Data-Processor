@@ -7,17 +7,26 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
-import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static com.ga.csv_processor.enums.ROLES.*;
 
 @Service
 public class CSVProcessor {
     ArrayList<Employee> employees;
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     @Autowired
     public CSVProcessor(ArrayList<Employee> employees) {
@@ -30,11 +39,12 @@ public class CSVProcessor {
      * @return ArrayList of Employee.
      */
     public ArrayList<Employee> loadEmployees(MultipartFile employeeFile) {
+        lock.writeLock().lock();
+
         try {
             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(employeeFile.getInputStream()));
             String line;
             ArrayList<Employee> employees = new ArrayList<>();
-            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd");
 
             while ((line = bufferedReader.readLine()) != null) { // Load up data rows
                 String[] employeeData = line.split(",");
@@ -54,6 +64,8 @@ public class CSVProcessor {
             return this.employees;
         } catch (IOException e) {
             throw new RuntimeException("File upload error: " + e.getMessage());
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
@@ -64,7 +76,7 @@ public class CSVProcessor {
      * - Project completion % below 60% get no raise at all
      * - Project completion % above 80% get 1.5x job role raise
      * FORMULA: (years worked * 2%) + role%
-     * @param employee Employee
+     * @param employee Employee object
      * @return double New increased salary
      */
     public double calculateSalaryWithRaise(Employee employee) {
@@ -98,51 +110,121 @@ public class CSVProcessor {
     }
 
     /**
-     * Returns an employees.csv file that contains the employees with their new raised salaries.
-     * @param employeeFile MultipartFile original employees .csv or , separated .txt file to calculate from.
-     * @return boolean true if successfully saved file.
+     * Returns an employees.csv file that contains the employees with their new raised salaries. Write locked.
+     * Supports pooled multithreading through the use of Runnable workers.
+     * @return boolean true if successfully saved file data/employees.csv
      */
-    public boolean downloadEmployeesWithRaiseFile(MultipartFile employeeFile) {
-        this.employees = loadEmployees(employeeFile);
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    public boolean downloadEmployeesWithRaise() {
+        lock.writeLock().lock();
 
         try {
+            int total = this.employees.size();
+            AtomicInteger index = new AtomicInteger(0); // For the loop
+            ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>(); // For data rows to add them sequentially while supporting multithreading
+
+            ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()); // Thread pool
+
+            Runnable worker = () -> { // Process data rows into a queue
+                for (int i = index.getAndIncrement(); i < total; i = index.getAndIncrement()) { // Write each employee as a data row
+                    Employee employee = this.employees.get(i);
+                    employee.setSalary(calculateSalaryWithRaise(employee));
+
+                    String row = formatDataRow(employee);
+
+                    queue.add(row);
+                }
+            };
+
+            // Launch workers
+            int workers = Runtime.getRuntime().availableProcessors();
+            for (int i = 0; i < workers; i++) {
+                executorService.submit(worker);
+            }
+
+            executorService.shutdown();
+            boolean isTerminated = executorService.awaitTermination(60, TimeUnit.SECONDS);
+
+            if (isTerminated) { // Write only after all workers done adding rows to queue
+                return writeDataRowsToFile(queue);
+            }
+
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e.getMessage());
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Get list of employees data objects.
+     * @return ArrayList of Employee
+     */
+    public ArrayList<Employee> getEmployees() {
+        lock.readLock().lock();
+        try {
+            return employees;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Write data rows to data/employees.csv file.
+     * @param queue ConcurrentLinkedQueue of String the data rows' queue.
+     * @return boolean true if successfully written.
+     */
+    private boolean writeDataRowsToFile(ConcurrentLinkedQueue<String> queue) {
+        try { // Write data rows into csv file
+            List<String> rows = sortDataQueue(queue);
             BufferedWriter writer = new BufferedWriter(new FileWriter("data/employees.csv"));
 
-            int index = 0;
-            int total = this.employees.size();
-            for (Employee employee : this.employees) { // Write each employee as a data row
-                employee.setSalary(calculateSalaryWithRaise(employee));
+            for (int i = 0; i < rows.size(); i++) {
+                writer.write(rows.get(i));
 
-                String row = employee.getId() + "," +
-                        employee.getName() + "," +
-                        employee.getSalary() + "," +
-                        employee.getJoinDate().format(formatter) + "," +
-                        employee.getRole() + "," +
-                        employee.getProjectCompletionPercentage();
-
-                writer.write(row);
-                if (index != (total - 1)) writer.newLine(); // avoid adding a new empty line at last row
-
-                index++;
+                if (i != rows.size() - 1) { // Avoid adding new line after last row
+                    writer.newLine();
+                }
             }
 
             writer.close();
 
             return true;
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("File write error: " + e.getMessage());
         }
     }
+
+    /**
+     * Sort data queue by employee id.
+     * @param queue ConcurrentLinkedQueue of String
+     * @return List of String sorted list.
+     */
+    private List<String> sortDataQueue(ConcurrentLinkedQueue<String> queue) {
+        List<String> list = new ArrayList<>();
+        while (!queue.isEmpty()) {
+            list.add(queue.poll());
+        }
+
+        list.sort(Comparator.comparingInt(row -> Integer.parseInt(row.split(",")[0])));
+
+        return list;
+    }
+
+    /**
+     * Take Employee object and return it as a string data row for CSV saving.
+     * @param employee Employee
+     * @return String .csv formatted.
+     */
+    private String formatDataRow(Employee employee) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        return employee.getId() + "," +
+                employee.getName() + "," +
+                employee.getSalary() + "," +
+                employee.getJoinDate().format(formatter) + "," +
+                employee.getRole() + "," +
+                employee.getProjectCompletionPercentage();
+    }
 }
-
-/*
-    - use thread pool
-
-    - Locks: The java.util.concurrent.locks.Lock interface provides a more flexible synchronization mechanism than intrinsic locks.
-    It allows for more advanced locking strategies such as reentrant locks, fair locks, and condition variables.
-
-    - Atomic operations: Java provides atomic classes such as AtomicInteger, AtomicLong, and AtomicReference in the java.util.concurrent.atomic package.
-    These classes provide atomic operations that are guaranteed to be executed without interruption,
-    making them useful for implementing thread-safe operations on primitive types and object references.
-    */

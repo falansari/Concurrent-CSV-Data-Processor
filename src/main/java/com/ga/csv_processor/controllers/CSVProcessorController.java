@@ -8,12 +8,17 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
+import java.util.concurrent.*;
 
 @RestController
 @RequestMapping("processor")
 public class CSVProcessorController {
     @Autowired
     private CSVProcessor csvProcessor;
+    /**
+     * fixed thread pool for asynchronous service execution, utilizes all available processor cores.
+     */
+    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
     /**
      * Upload employee data with a CSV or , separated text file.
@@ -21,27 +26,35 @@ public class CSVProcessorController {
      * @return ArrayList of Employee objects
      */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ArrayList<Employee> uploadEmployeeData(@RequestParam("file") MultipartFile file) {
-        return csvProcessor.loadEmployees(file);
+    public CompletableFuture<ArrayList<Employee>> uploadEmployeeData(@RequestParam("file") MultipartFile file) {
+        return CompletableFuture.supplyAsync(() -> csvProcessor.loadEmployees(file), executorService);
     }
 
     /**
-     * Calculate and return employee's new salary after raise.
-     * @param employee Employee
+     * Get list of employees. Supports asynchronous multithreading.
+     * @return ArrayList of Employee objects
+     */
+    @GetMapping("/employees")
+    public CompletableFuture<ArrayList<Employee>> getEmployees() {
+        return CompletableFuture.supplyAsync(() -> csvProcessor.getEmployees(), executorService);
+    }
+
+    /**
+     * Calculate and return employee's new salary after raise. Supports asynchronous multithreading.
+     * @param employee Employee object
      * @return double Raised salary.
      */
     @PostMapping("/raise")
-    public double calculateSalaryWithRaise(@RequestBody Employee employee) {
-        return csvProcessor.calculateSalaryWithRaise(employee);
+    public CompletableFuture<Double> calculateSalaryWithRaise(@RequestBody Employee employee) {
+        return CompletableFuture.supplyAsync(() -> csvProcessor.calculateSalaryWithRaise(employee), executorService);
     }
 
     /**
      * Download employee.csv file with new salaries after raise. Takes original before-raise file as data input.
-     * @param file MultipartFile .csv, or , separated .txt
      * @return boolean True if successfully downloaded.
      */
-    @PostMapping(value = "/download", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public boolean downloadEmployeeFileWithRaise(@RequestParam("file") MultipartFile file) {
-        return csvProcessor.downloadEmployeesWithRaiseFile(file);
+    @GetMapping("/download")
+    public CompletableFuture<Boolean> downloadEmployeesFileWithRaise() {
+        return CompletableFuture.supplyAsync(() -> csvProcessor.downloadEmployeesWithRaise(), executorService);
     }
 }
